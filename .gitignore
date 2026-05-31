@@ -1,0 +1,42 @@
+# =============================================
+# AdWhiz Avatar Reels - Root .gitignore
+# =============================================
+
+# Python virtual environments
+ai-engines/*/venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# AI model weights (downloaded automatically at setup time)
+ai-engines/avatar/LivePortrait/pretrained_weights/
+!ai-engines/avatar/LivePortrait/pretrained_weights/.gitkeep
+
+# Temporary generation sessions
+ai-engines/avatar/temp/
+
+# Node.js dependencies
+node_modules/
+
+# Environment secrets (contains API keys!)
+.env
+
+# Runtime logs
+logs/
+
+# Storage - generated content (keep directory structure via .gitkeep)
+storage/cache/*
+storage/temp/*
+storage/exports/*
+storage/failed-renders/*
+!storage/**/.gitkeep
+
+# Whisper.cpp pre-compiled binaries and model (auto-downloaded at runtime)
+remotion/whisper.cpp/
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+*.swo
