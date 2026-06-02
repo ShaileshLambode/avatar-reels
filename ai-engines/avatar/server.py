@@ -127,10 +127,12 @@ def animate(
     
     # Parse options if provided
     relative_motion = True
+    driving_video_name = "d0.mp4"
     if options:
         try:
             opt_json = json.loads(options)
             relative_motion = opt_json.get("relative_motion_mode", True)
+            driving_video_name = opt_json.get("driving_video", "d0.mp4")
             logger.info(f"Received animation options: {opt_json}")
         except Exception as e:
             logger.warning(f"Failed to parse options JSON: {str(e)}")
@@ -150,20 +152,28 @@ def animate(
         
     logger.info(f"Saved uploads to session {session_id}. Source: {source_path}, Audio: {audio_path}")
 
-    # Stage A: Generate driving video from source portrait + audio using FFmpeg
+    # Stage A: Generate driving video by looping a dynamic talking template overlaid with audio
     driving_video_path = os.path.join(inputs_dir, "driving.mp4")
-    logger.info("Stage A: Generating looped driving video via FFmpeg...")
     
-    # Use robust scaling filter to guarantee even dimensions for H.264
+    # Resolve the template driving video
+    d0_path = os.path.join(LIVEPORTRAIT_DIR, "assets", "examples", "driving", driving_video_name)
+    if not os.path.exists(d0_path):
+        logger.warning(f"Requested template {driving_video_name} not found. Falling back to default d0.mp4.")
+        d0_path = os.path.join(LIVEPORTRAIT_DIR, "assets", "examples", "driving", "d0.mp4")
+        
+    logger.info(f"Stage A: Generating looped driving video from template {d0_path} via FFmpeg...")
+    
+    # We loop the template video indefinitely and map our custom speech audio, ending exactly when the audio ends
     ffmpeg_cmd = [
         "ffmpeg", "-y",
-        "-loop", "1", "-i", source_path,
+        "-stream_loop", "-1", "-i", d0_path,
         "-i", audio_path,
-        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-        "-c:v", "libx264", "-tune", "stillimage",
+        "-c:v", "libx264",
         "-c:a", "aac", "-b:a", "192k",
         "-pix_fmt", "yuv420p",
         "-shortest",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
         driving_video_path
     ]
     

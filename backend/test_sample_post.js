@@ -1,14 +1,14 @@
 const requestBody = {
-  prompt: "A futuristic cyberpunk marketing agency vertical reel",
+  prompt: "A high-energy cyberpunk marketing showcase promoting AI-driven branding, showcasing holographic analytics, neon cityscape visual transitions, and futuristic creative assets.",
   config: {
-    duration: 5,
-    voice: "male_heroic",
+    duration: 30,
+    voice: "Claribel Dervla",
     tone: "energetic"
   }
 };
 
 async function postSampleReel() {
-  console.log("Sending POST request to create a 5-second sample reel...");
+  console.log("Sending POST request to create a 30-second sample reel...");
   console.log("Request Payload:", JSON.stringify(requestBody, null, 2));
 
   try {
@@ -26,12 +26,13 @@ async function postSampleReel() {
     }
 
     const data = await response.json();
+    const reel = data.reel || data;
     
     console.log("\n=======================================================");
-    console.log("✅ SUCCESS: 5-Second Test Reel Created & Enqueued!");
-    console.log(`Reel ID:      ${data._id || data.reelId}`);
-    console.log(`Prompt:       "${data.prompt}"`);
-    console.log(`Duration:     ${data.config?.duration || 5} seconds`);
+    console.log("✅ SUCCESS: 30-Second Test Reel Created & Enqueued!");
+    console.log(`Reel ID:      ${reel._id || data.reelId || "N/A"}`);
+    console.log(`Prompt:       "${reel.prompt || "N/A"}"`);
+    console.log(`Duration:     ${reel.config?.duration || 30} seconds`);
     console.log("=======================================================");
     console.log("\nNext Steps:");
     console.log("1. Ensure TTS (5100) and Avatar (5200) servers are running.");

@@ -2,10 +2,10 @@ const path = require("path");
 
 async function postSampleReel() {
   const requestBody = {
-    prompt: "A futuristic cyberpunk marketing agency vertical reel",
+    prompt: "A futuristic cyberpunk marketing agency vertical reel.",
     config: {
       duration: 30,
-      voice: "male_heroic",
+      voice: "Claribel Dervla",
       tone: "energetic"
     }
   };
@@ -28,12 +28,13 @@ async function postSampleReel() {
     }
 
     const data = await response.json();
+    const reel = data.reel || data;
     
     console.log("\n=======================================================");
     console.log("✅ SUCCESS: 30-Second Test Reel Created & Enqueued!");
-    console.log(`Reel ID:      ${data._id || data.reelId}`);
-    console.log(`Prompt:       "${data.prompt}"`);
-    console.log(`Duration:     ${data.config?.duration || 30} seconds`);
+    console.log(`Reel ID:      ${reel._id || data.reelId || "N/A"}`);
+    console.log(`Prompt:       "${reel.prompt || "N/A"}"`);
+    console.log(`Duration:     ${reel.config?.duration || 30} seconds`);
     console.log("=======================================================");
     console.log("\nNext Steps:");
     console.log("1. Ensure TTS (5100) and Avatar (5200) servers are running.");
