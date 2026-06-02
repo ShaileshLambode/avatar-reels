@@ -8,27 +8,32 @@ const logger = require("../utils/logger");
 
 class AvatarService {
   constructor() {
-    this.avatarUrl = config.AVATAR_SERVICE_URL || "http://localhost:5200";
+    this.liveportraitUrl = config.AVATAR_SERVICE_URL || "http://localhost:5200";
+    this.halloUrl = config.HALLO_SERVICE_URL || "http://localhost:5400";
+    this.defaultEngine = config.AVATAR_ENGINE || "liveportrait";
   }
 
   /**
-   * Check if the Python LivePortrait service is running
+   * Check if the designated Python service is running
    * @private
    */
-  async _checkHealth() {
+  async _checkHealth(targetUrl, engineName) {
     try {
-      const response = await axios.get(`${this.avatarUrl}/health`, { timeout: 5000 });
+      const response = await axios.get(`${targetUrl}/health`, { timeout: 5000 });
       if (response.status !== 200) {
         throw new Error(`HTTP status ${response.status}`);
       }
       if (response.data.status !== "ok") {
-        throw new Error(response.data.message || "LivePortrait backend status is not ok");
+        throw new Error(response.data.message || `${engineName} backend status is not ok`);
       }
     } catch (error) {
       const isRefused = error.code === "ECONNREFUSED";
+      const setupScript = engineName === "Hallo3" 
+        ? "cd avatar-reels/ai-engines/hallo3 && powershell -ExecutionPolicy Bypass -File start-hallo.ps1"
+        : "cd avatar-reels/ai-engines/avatar && powershell -ExecutionPolicy Bypass -File start-avatar.ps1";
       const errMsg = isRefused
-        ? `LivePortrait Python server is not running at ${this.avatarUrl}. Please start it using the PowerShell bootstrapper: cd avatar-reels/ai-engines/avatar && powershell -ExecutionPolicy Bypass -File start-avatar.ps1`
-        : `LivePortrait Python server health check failed: ${error.message}`;
+        ? `${engineName} Python server is not running at ${targetUrl}. Please start it using: ${setupScript}`
+        : `${engineName} Python server health check failed: ${error.message}`;
       throw new Error(`AvatarService: ${errMsg}`);
     }
   }
@@ -63,7 +68,7 @@ class AvatarService {
   /**
    * Core generator function driven by source image and voice audio
    * @param {object} assets - Object containing upstream assets (needs assets.audioPath)
-   * @param {object} avatarConfig - Configuration for animation (still_mode, expression_scale, etc.)
+   * @param {object} avatarConfig - Configuration for animation (engine, still_mode, etc.)
    * @param {string} reelId - The ID of the reel
    * @param {function} onProgress - Progress reporting callback
    * @returns {Promise<object>} Result containing standard relative path of the generated video
@@ -73,9 +78,13 @@ class AvatarService {
       throw new Error("AvatarService: No driven audio file path provided in assets");
     }
 
+    const engine = avatarConfig?.engine || this.defaultEngine;
+    const targetUrl = engine === "hallo" ? this.halloUrl : this.liveportraitUrl;
+    const engineName = engine === "hallo" ? "Hallo3" : "LivePortrait";
+
     // Dynamic Mock Bypass for rapid local CPU development
     if (config.MOCK_AVATAR) {
-      if (onProgress) onProgress(15, "[Avatar] MOCK MODE ACTIVE: Generating simulated spokesperson video...");
+      if (onProgress) onProgress(15, `[Avatar] MOCK MODE ACTIVE: Generating simulated ${engineName} video...`);
       
       const tempDir = path.resolve(__dirname, "../../../storage/temp", reelId.toString());
       ensureDir(tempDir);
@@ -90,7 +99,7 @@ class AvatarService {
         throw new Error(`AvatarService: Driven audio file not found at: ${audioPath}`);
       }
 
-      if (onProgress) onProgress(40, "[Avatar] MOCK MODE: Compiling spokesperson portrait with vocal track using FFmpeg...");
+      if (onProgress) onProgress(40, `[Avatar] MOCK MODE: Compiling spokesperson portrait with vocal track via FFmpeg (${engineName} fallback)...`);
       
       // Resolve FFmpeg path dynamically
       const ffmpegBin = fs.existsSync("C:\\ffmpeg\\bin\\ffmpeg.exe") ? "C:\\ffmpeg\\bin\\ffmpeg.exe" : "ffmpeg";
@@ -106,20 +115,20 @@ class AvatarService {
         throw new Error(`AvatarService Mock compilation failed: ${err.message}`);
       }
       
-      if (onProgress) onProgress(100, "[Avatar] MOCK MODE: Talking-head placeholder video generated successfully!");
+      if (onProgress) onProgress(100, `[Avatar] MOCK MODE: Talking-head placeholder video generated successfully!`);
       return {
         avatarVideoPath: sanitizePath(`storage/temp/${reelId}/avatar.mp4`),
       };
     }
 
-    if (onProgress) onProgress(5, "[Avatar] Checking LivePortrait service health...");
-    await this._checkHealth();
+    if (onProgress) onProgress(5, `[Avatar] Checking ${engineName} service health...`);
+    await this._checkHealth(targetUrl, engineName);
 
     const tempDir = path.resolve(__dirname, "../../../storage/temp", reelId.toString());
     ensureDir(tempDir);
 
     // Resolve source image path
-    if (onProgress) onProgress(10, "[Avatar] Resolving source avatar image...");
+    if (onProgress) onProgress(10, `[Avatar] Resolving source avatar image...`);
     const sourceImagePath = this._resolveSourceImage(avatarConfig);
     logger.info(`AvatarService: Using source image: ${sourceImagePath}`);
 
@@ -133,8 +142,8 @@ class AvatarService {
     const finalVideoPath = path.join(tempDir, "avatar.mp4");
 
     if (onProgress) {
-      onProgress(15, "[Avatar] Launching LivePortrait animation pipeline...");
-      onProgress(20, "[Avatar] Processing face expression retargeting (LivePortrait)...");
+      onProgress(15, `[Avatar] Launching ${engineName} animation pipeline...`);
+      onProgress(20, `[Avatar] Processing face expression generation (${engineName})...`);
     }
 
     try {
@@ -147,7 +156,7 @@ class AvatarService {
       }));
 
       // Stream the response directly to storage to avoid RAM blowup
-      const response = await axios.post(`${this.avatarUrl}/animate`, form, {
+      const response = await axios.post(`${targetUrl}/animate`, form, {
         responseType: "stream",
         headers: {
           ...form.getHeaders(),
@@ -173,7 +182,7 @@ class AvatarService {
         throw new Error("Generated MP4 file is empty or missing from disk");
       }
 
-      if (onProgress) onProgress(100, "[Avatar] Talking-head video generated successfully!");
+      if (onProgress) onProgress(100, `[Avatar] Talking-head video generated successfully!`);
 
       return {
         avatarVideoPath: sanitizePath(`storage/temp/${reelId}/avatar.mp4`),
@@ -190,7 +199,7 @@ class AvatarService {
 
       // Handle stream errors which don't have standard error.response.data
       const errorMsg = error.response?.data?.detail || error.message;
-      throw new Error(`LivePortrait generation failed: ${errorMsg}`);
+      throw new Error(`${engineName} generation failed: ${errorMsg}`);
     }
   }
 }

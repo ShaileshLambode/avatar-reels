@@ -99,7 +99,8 @@ class CpuWorker extends BaseWorker {
       assets,
       {
         avatarImage: config?.avatarImage || null,
-        relative_motion_mode: config?.relative_motion_mode !== false
+        relative_motion_mode: config?.relative_motion_mode !== false,
+        engine: config?.engine || null
       },
       reelId.toString(),
       onProgress

@@ -6,6 +6,8 @@ const optionalVars = [
   "OPENAI_API_KEY",
   "TTS_SERVICE_URL",
   "AVATAR_SERVICE_URL",
+  "HALLO_SERVICE_URL",
+  "AVATAR_ENGINE",
   "LIPSYNC_SERVICE_URL",
   "OPENAI_MODEL",
   "OPENAI_MAX_RETRIES",
@@ -35,6 +37,8 @@ const config = {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   TTS_SERVICE_URL: process.env.TTS_SERVICE_URL || "http://localhost:5100",
   AVATAR_SERVICE_URL: process.env.AVATAR_SERVICE_URL || "http://localhost:5200",
+  HALLO_SERVICE_URL: process.env.HALLO_SERVICE_URL || "http://localhost:5400",
+  AVATAR_ENGINE: process.env.AVATAR_ENGINE || "liveportrait", // 'liveportrait' or 'hallo'
   LIPSYNC_SERVICE_URL: process.env.LIPSYNC_SERVICE_URL || "http://localhost:5300",
   OPENAI_MODEL: process.env.OPENAI_MODEL || "gpt-4o-mini",
   OPENAI_MAX_RETRIES: parseInt(process.env.OPENAI_MAX_RETRIES || "3", 10),
