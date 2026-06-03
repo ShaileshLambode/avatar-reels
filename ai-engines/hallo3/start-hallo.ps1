@@ -4,6 +4,7 @@
 $ErrorActionPreference = "Stop"
 $ScriptName = $MyInvocation.MyCommand.Name
 $env:PYTHONIOENCODING="utf-8"
+$env:USE_LIBUV="0"
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "      AdWhiz Hallo3 Local Setup           " -ForegroundColor Cyan

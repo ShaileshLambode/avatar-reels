@@ -1,5 +1,6 @@
 import argparse
 import os
+os.environ["USE_LIBUV"] = "0"
 import torch
 import json
 import warnings

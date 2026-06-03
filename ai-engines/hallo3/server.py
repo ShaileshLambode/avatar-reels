@@ -1,4 +1,5 @@
 import os
+os.environ["USE_LIBUV"] = "0"
 import shutil
 import subprocess
 import uuid
