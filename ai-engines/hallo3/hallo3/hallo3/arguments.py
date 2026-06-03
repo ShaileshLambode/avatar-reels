@@ -83,6 +83,12 @@ def get_args(args_list=None, parser=None):
 
 
     args = parser.parse_args(args_list)
+    if not hasattr(args, "deepspeed"):
+        args.deepspeed = False
+    if not hasattr(args, "deepspeed_config"):
+        args.deepspeed_config = None
+    if not hasattr(args, "zero_stage"):
+        args.zero_stage = 0
     args = process_config_to_args(args)
 
     if not args.train_data:
