@@ -75,9 +75,12 @@ def get_args(args_list=None, parser=None):
     parser = add_data_args(parser)
     parser = add_others_config_args(parser)
 
-    import deepspeed
+    try:
+        import deepspeed
+        parser = deepspeed.add_config_arguments(parser)
+    except ImportError:
+        deepspeed = None
 
-    parser = deepspeed.add_config_arguments(parser)
 
     args = parser.parse_args(args_list)
     args = process_config_to_args(args)

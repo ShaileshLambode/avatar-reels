@@ -248,9 +248,9 @@ def sampling_main(args, model_cls):
 
     num_samples = [1]
     force_uc_zero_embeddings = ["txt"]
-    device = model.device
+    device = args.device if hasattr(args, 'device') else (model.device if hasattr(model, 'device') else "cpu")
     ic(device)
-    model = model.to("cuda")
+    model = model.to(device)
     n_motion_frame = 2
     mask_rate = 0.1
     with torch.no_grad():
@@ -273,12 +273,12 @@ def sampling_main(args, model_cls):
 
             face_emb, face_mask_path = image_processor.preprocess(image_path, save_path, 1.2)
             face_emb = face_emb.reshape(1, -1)
-            face_emb = torch.tensor(face_emb).to("cuda")
+            face_emb = torch.tensor(face_emb).to(device)
             
             image = Image.open(image_path).convert("RGB")
-            image = transform(image).unsqueeze(0).to("cuda")
+            image = transform(image).unsqueeze(0).to(device)
             face_mask = Image.open(face_mask_path).convert("RGB")
-            face_mask = transform(face_mask).unsqueeze(0).to("cuda")
+            face_mask = transform(face_mask).unsqueeze(0).to(device)
             ref_image = image * face_mask
             
             _, _, h, w = image.shape
@@ -342,7 +342,7 @@ def sampling_main(args, model_cls):
 
             for k in c:
                 if not k == "crossattn":
-                    c[k], uc[k] = map(lambda y: y[k][: math.prod(num_samples)].to("cuda"), (c, uc))
+                    c[k], uc[k] = map(lambda y: y[k][: math.prod(num_samples)].to(device), (c, uc))
 
             times = audio_emb.shape[0] // (L-n_motion_frame)
             if times * (L-n_motion_frame) < audio_emb.shape[0]:
@@ -412,7 +412,7 @@ def sampling_main(args, model_cls):
                 samples_x = recon.permute(0, 2, 1, 3, 4).contiguous()
                 samples = torch.clamp((samples_x + 1.0) / 2.0, min=0.0, max=1.0).cpu()
                 
-                motion_image = samples[:,-n_motion_frame:].permute(0, 2, 1, 3, 4).contiguous().to(dtype=torch.bfloat16, device="cuda")
+                motion_image = samples[:,-n_motion_frame:].permute(0, 2, 1, 3, 4).contiguous().to(dtype=torch.bfloat16, device=device)
                 motion_image = motion_image * 2 - 1
                 mask_image = add_mask_to_first_frame(motion_image, mask_rate=mask_rate)
                 mask_image = torch.cat([ref_image_pixel, mask_image], dim=2)

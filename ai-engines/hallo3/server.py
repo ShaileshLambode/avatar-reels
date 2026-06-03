@@ -125,48 +125,52 @@ def animate(
         
     logger.info(f"Saved uploads for Hallo3 session {session_id}.")
 
-    # Generate the dynamic config YAML for Hallo3
-    config_path = os.path.join(session_dir, "inference_config.yaml")
-    
-    # Standard template fields expected by scripts/inference_long.py or config
-    config_data = {
-        "source_image": source_path,
-        "driving_audio": audio_path,
-        "output_dir": outputs_dir,
-        "device": DEVICE,
-        "save_video": True,
-        # Default stable config flags for Hallo3
-        "ref_image_path": source_path,
-        "audio_path": audio_path,
-        "output_path": os.path.join(outputs_dir, "output.mp4")
-    }
-
-    # Parse and merge custom options if provided
+    # Parse options to extract prompt if provided, or default to a generic one
+    prompt = "A person talking"
+    custom_options = {}
     if options:
         try:
-            opt_json = json.loads(options)
-            config_data.update(opt_json)
-            logger.info(f"Applied custom options to config: {opt_json}")
+            custom_options = json.loads(options)
+            if "prompt" in custom_options:
+                prompt = custom_options["prompt"]
+            logger.info(f"Applied custom options: {custom_options}")
         except Exception as e:
             logger.warning(f"Failed to parse custom options JSON: {str(e)}")
 
-    with open(config_path, "w") as f:
-        yaml.dump(config_data, f, default_flow_style=False)
+    # Generate the temporary input file for sample_video.py
+    input_txt_path = os.path.join(session_dir, "input.txt")
+    with open(input_txt_path, "w", encoding="utf-8") as f:
+        # Format is prompt@@image_path@@audio_path
+        f.write(f"{prompt}@@{source_path}@@{audio_path}\n")
+
+    logger.info(f"Generated input text file at {input_txt_path}")
 
     # Execute Hallo3 inference via subprocess
     logger.info("Executing Hallo3 inference subprocess...")
     
-    # We will trigger the main long-inference script from Hallo3
+    # We trigger the native sample_video.py script inside the hallo3 folder
     cmd = [
-        VENV_PYTHON, "scripts/inference_long.py",
-        "--config", config_path
+        VENV_PYTHON, "hallo3/sample_video.py",
+        "--base", "configs/cogvideox_5b_i2v_s2.yaml", "configs/inference.yaml",
+        "--input-type", "txt",
+        "--input-file", input_txt_path,
+        "--output-dir", outputs_dir
     ]
+
+    # Handle custom seed option if present
+    if "seed" in custom_options:
+        cmd.extend(["--seed", str(custom_options["seed"])])
     
+    # Copy env and set CUDA_VISIBLE_DEVICES if fallback is active
+    env = os.environ.copy()
+    if DEVICE == "cpu":
+        env["CUDA_VISIBLE_DEVICES"] = ""
+
     logger.info(f"Running command: {' '.join(cmd)} (Working Directory: {HALLO3_DIR})")
     
     try:
-        # Execute the python script inside the cloned hallo3 repo directory
-        res = subprocess.run(cmd, cwd=HALLO3_DIR, capture_output=True, text=True, check=True)
+        # Execute the python script inside the cloned hallo3 repo directory with custom environment
+        res = subprocess.run(cmd, env=env, cwd=HALLO3_DIR, capture_output=True, text=True, check=True)
         logger.info(f"Hallo3 completed successfully.\nInference log output:\n{res.stdout}")
     except subprocess.CalledProcessError as e:
         logger.error(f"Hallo3 inference failed with exit code {e.returncode}.\nStdout: {e.stdout}\nStderr: {e.stderr}")
