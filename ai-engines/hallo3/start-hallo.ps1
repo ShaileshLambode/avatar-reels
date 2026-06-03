@@ -47,7 +47,8 @@ if (-not (Test-Path "venv")) {
 # 4. Activate Venv and Upgrade Pip
 Write-Host "[4/6] Activating virtual environment and upgrading pip..." -ForegroundColor Yellow
 & ".\venv\Scripts\Activate.ps1"
-python -m pip install --upgrade pip setuptools wheel Cython
+python -m pip install --upgrade pip wheel Cython
+python -m pip install "setuptools<82"
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "Failed to upgrade pip and install Cython. Proceeding."
 }
