@@ -244,25 +244,89 @@ class FrozenT5Embedder(AbstractEmbModel):
         cache_dir=None,
     ):
         super().__init__()
-        if model_dir != "google/t5-v1_1-xxl":
-            self.tokenizer = T5Tokenizer.from_pretrained(model_dir)
-            self.transformer = T5EncoderModel.from_pretrained(model_dir)
-        else:
-            self.tokenizer = T5Tokenizer.from_pretrained(model_dir, cache_dir=cache_dir)
-            self.transformer = T5EncoderModel.from_pretrained(model_dir, cache_dir=cache_dir)
+        import os
         self.device = device
         self.max_length = max_length
-        if freeze:
-            self.freeze()
+        
+        # Check if pre-computed embeddings exist in the same parent directory
+        parent_dir = os.path.dirname(model_dir)
+        cond_path = os.path.join(parent_dir, "cond_embed.pt")
+        uncond_path = os.path.join(parent_dir, "uncond_embed.pt")
+        
+        if os.path.exists(cond_path) and os.path.exists(uncond_path):
+            print(f"[FrozenT5Embedder] Bypassing model loading! Using pre-computed embeds: {cond_path}")
+            self.use_bypass = True
+            self.cond_embed = torch.load(cond_path, map_location="cpu").to(dtype=torch.bfloat16)
+            self.uncond_embed = torch.load(uncond_path, map_location="cpu").to(dtype=torch.bfloat16)
+            # Define dummy parameter so parameters() isn't completely empty
+            self.dummy_param = nn.Parameter(torch.zeros(1))
+        else:
+            print(f"[FrozenT5Embedder] Pre-computed embeds not found at {cond_path}. Loading full T5 model...")
+            self.use_bypass = False
+            if model_dir != "google/t5-v1_1-xxl":
+                self.tokenizer = T5Tokenizer.from_pretrained(model_dir)
+                self.transformer = T5EncoderModel.from_pretrained(model_dir, torch_dtype=torch.bfloat16)
+            else:
+                self.tokenizer = T5Tokenizer.from_pretrained(model_dir, cache_dir=cache_dir)
+                self.transformer = T5EncoderModel.from_pretrained(model_dir, cache_dir=cache_dir, torch_dtype=torch.bfloat16)
+            if freeze:
+                self.freeze()
+
+    @property
+    def device(self):
+        if self.use_bypass:
+            return self.dummy_param.device
+        else:
+            if hasattr(self, 'transformer') and len(list(self.transformer.parameters())) > 0:
+                return next(self.transformer.parameters()).device
+            return getattr(self, '_device', 'cuda')
+
+    @device.setter
+    def device(self, value):
+        self._device = value
+
+    def to(self, *args, **kwargs):
+        device = None
+        if len(args) > 0:
+            if isinstance(args[0], (torch.device, str)):
+                device = args[0]
+            elif isinstance(args[0], torch.Tensor):
+                device = args[0].device
+        if "device" in kwargs:
+            device = kwargs["device"]
+            
+        if device is not None:
+            self._device = device
+            if self.use_bypass:
+                self.cond_embed = self.cond_embed.to(device)
+                self.uncond_embed = self.uncond_embed.to(device)
+        else:
+            if self.use_bypass:
+                self.cond_embed = self.cond_embed.to(*args, **kwargs)
+                self.uncond_embed = self.uncond_embed.to(*args, **kwargs)
+                
+        return super().to(*args, **kwargs)
 
     def freeze(self):
-        self.transformer = self.transformer.eval()
-
-        for param in self.parameters():
-            param.requires_grad = False
+        if not self.use_bypass:
+            self.transformer = self.transformer.eval()
+            for param in self.parameters():
+                param.requires_grad = False
 
     # @autocast
     def forward(self, text):
+        if self.use_bypass:
+            if isinstance(text, str):
+                text = [text]
+            device = self.device
+            embeds = []
+            for t in text:
+                if t == "" or t == "negative_prompt":
+                    embeds.append(self.uncond_embed)
+                else:
+                    embeds.append(self.cond_embed)
+            return torch.cat(embeds, dim=0).to(device)
+
         batch_encoding = self.tokenizer(
             text,
             truncation=True,

@@ -2,6 +2,7 @@ import argparse
 import os
 os.environ["USE_LIBUV"] = "0"
 import torch
+torch.set_num_threads(4)
 import json
 import warnings
 import omegaconf
@@ -90,6 +91,8 @@ def get_args(args_list=None, parser=None):
         args.deepspeed_config = None
     if not hasattr(args, "zero_stage"):
         args.zero_stage = 0
+    if os.name == "nt" or not torch.cuda.is_available():
+        args.distributed_backend = "gloo"
     args = process_config_to_args(args)
 
     if not args.train_data:

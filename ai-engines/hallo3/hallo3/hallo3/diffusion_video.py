@@ -329,6 +329,9 @@ class SATVideoDiffusionEngine(nn.Module):
             self.model, input, sigma, c, concat_images=concat_images, **addtional_model_inputs
         )
 
+        if self.sampler is not None:
+            self.sampler.device = self.device
+
         samples = self.sampler(denoiser, randn, cond, uc=uc, scale=scale, scale_emb=scale_emb, 
                                audio_emb=audio_emb, face_emb=face_emb)
         samples = samples.to(self.dtype)

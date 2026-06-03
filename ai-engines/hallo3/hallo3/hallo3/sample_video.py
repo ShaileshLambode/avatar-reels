@@ -1,4 +1,5 @@
 import os
+os.environ["USE_LIBUV"] = "0"
 import math
 import argparse
 from typing import List, Union
@@ -7,6 +8,7 @@ from omegaconf import ListConfig
 import imageio
 
 import torch
+torch.set_num_threads(4)
 import numpy as np
 from einops import rearrange
 import torchvision.transforms as TT
@@ -201,7 +203,12 @@ def add_mask_to_first_frame(image, mask_rate=0.25):
 
 def sampling_main(args, model_cls):
     if isinstance(model_cls, type):
-        model = get_model(args, model_cls)
+        original_dtype = torch.get_default_dtype()
+        torch.set_default_dtype(torch.bfloat16)
+        try:
+            model = get_model(args, model_cls)
+        finally:
+            torch.set_default_dtype(original_dtype)
     else:
         model = model_cls
 
@@ -236,7 +243,8 @@ def sampling_main(args, model_cls):
                     wav2vec_only_last_features,
                     os.path.dirname(audio_separator_model_file),
                     os.path.basename(audio_separator_model_file),
-                    os.path.join(".cache", "audio_preprocess")
+                    os.path.join(".cache", "audio_preprocess"),
+                    device=args.device
                 )
     
     image_processor = ImageProcessor(args.face_analysis_model_path)

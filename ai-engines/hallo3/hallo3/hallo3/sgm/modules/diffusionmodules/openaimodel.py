@@ -940,7 +940,7 @@ class UNetModel(nn.Module):
                 latest = latest_file.read().strip()
             ckpt_path = os.path.join(ckpt_dir, latest, "mp_rank_00_model_states.pt")
             print(f"loading lora from {ckpt_path}")
-            sd = th.load(ckpt_path)["module"]
+            sd = th.load(ckpt_path, mmap=True)["module"]
             sd = {
                 key[len("model.diffusion_model") :]: sd[key] for key in sd if key.startswith("model.diffusion_model")
             }

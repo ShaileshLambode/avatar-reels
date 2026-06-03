@@ -161,7 +161,7 @@ class AvatarService {
         headers: {
           ...form.getHeaders(),
         },
-        timeout: 2700000, // 45 minutes timeout for CPU environments
+        timeout: 0, // Disable timeout for CPU environments
       });
 
       if (onProgress) onProgress(80, "[Avatar] Writing video stream to disk...");
