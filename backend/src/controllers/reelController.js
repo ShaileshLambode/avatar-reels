@@ -11,7 +11,7 @@ exports.createReel = async (req, res, next) => {
       return res.status(400).json({ success: false, error: "Prompt is required" });
     }
 
-    const newReel = new Reel({
+    const newReel = new Reel({ 
       prompt,
       config: config || {},
       status: "pending"

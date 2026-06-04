@@ -251,7 +251,8 @@ class SATVideoDiffusionEngine(nn.Module):
         n_samples = default(self.en_and_decode_n_samples_a_time, z.shape[0])
         n_rounds = math.ceil(z.shape[0] / n_samples)
         all_out = []
-        with torch.autocast("cuda", enabled=not self.disable_first_stage_autocast):
+        device_type = "cuda" if torch.cuda.is_available() else "cpu"
+        with torch.autocast(device_type, enabled=not self.disable_first_stage_autocast):
             for n in range(n_rounds):
                 if isinstance(self.first_stage_model.decoder, VideoDecoder):
                     kwargs = {"timesteps": len(z[n * n_samples : (n + 1) * n_samples])}
@@ -273,7 +274,8 @@ class SATVideoDiffusionEngine(nn.Module):
         n_samples = default(self.en_and_decode_n_samples_a_time, x.shape[0])
         n_rounds = math.ceil(x.shape[0] / n_samples)
         all_out = []
-        with torch.autocast("cuda", enabled=not self.disable_first_stage_autocast):
+        device_type = "cuda" if torch.cuda.is_available() else "cpu"
+        with torch.autocast(device_type, enabled=not self.disable_first_stage_autocast):
             for n in range(n_rounds):
                 out = self.first_stage_model.encode(x[n * n_samples : (n + 1) * n_samples])
                 all_out.append(out)
