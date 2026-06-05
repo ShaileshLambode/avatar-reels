@@ -238,6 +238,110 @@ def animate(
     
     return FileResponse(final_video_path, media_type="video/mp4", filename="avatar.mp4")
 
+@app.post("/neutralize")
+def neutralize(
+    background_tasks: BackgroundTasks,
+    portrait: UploadFile = File(...),
+    duration_seconds: float = Form(3.0)
+):
+    """
+    Takes a portrait image and generates a neutral-expression (mouth closed) aligned video loop.
+    It loops the static portrait itself as the driving video with --flag_normalize_lip enabled.
+    """
+    start_time = time.time()
+    
+    # Check prerequisites
+    if not os.path.exists(LIVEPORTRAIT_DIR):
+        raise HTTPException(status_code=503, detail="LivePortrait engine repository not cloned yet.")
+        
+    if not os.path.exists(VENV_PYTHON):
+        raise HTTPException(status_code=503, detail="Python virtual environment not ready.")
+
+    # Create unique session directory
+    session_id = f"session_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    session_dir = os.path.join(TEMP_DIR, session_id)
+    inputs_dir = os.path.join(session_dir, "inputs")
+    outputs_dir = os.path.join(session_dir, "outputs")
+    
+    os.makedirs(inputs_dir, exist_ok=True)
+    os.makedirs(outputs_dir, exist_ok=True)
+
+    # Save uploaded portrait image
+    portrait_ext = os.path.splitext(portrait.filename)[1] or ".png"
+    portrait_path = os.path.join(inputs_dir, f"portrait{portrait_ext}")
+    
+    with open(portrait_path, "wb") as f:
+        shutil.copyfileobj(portrait.file, f)
+        
+    logger.info(f"Saved upload to session {session_id}. Portrait: {portrait_path}")
+
+    # Generate a static 3-second driving video from the portrait itself
+    driving_video_path = os.path.join(inputs_dir, "driving.mp4")
+    logger.info("Generating static driving video from portrait via FFmpeg...")
+    
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-loop", "1", "-i", portrait_path,
+        "-t", str(duration_seconds),
+        "-r", "25",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        driving_video_path
+    ]
+    
+    try:
+        subprocess.run(ffmpeg_cmd, capture_output=True, text=True, check=True)
+        logger.info("FFmpeg static driving video completed successfully.")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg failed with exit code {e.returncode}.\nStdout: {e.stdout}\nStderr: {e.stderr}")
+        shutil.rmtree(session_dir)
+        raise HTTPException(status_code=500, detail=f"Failed to generate static driving video: {e.stderr}")
+
+    # Run LivePortrait with normalization
+    logger.info("Running LivePortrait neutralization inference...")
+    cmd = [
+        VENV_PYTHON, "inference.py",
+        "-s", portrait_path,
+        "-d", driving_video_path,
+        "--output_dir", outputs_dir,
+        "--flag_normalize_lip"  # Force lips/mouth close
+    ]
+    
+    # Check CUDA availability at runtime to conditionally force CPU inference
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            logger.info("CUDA not available in PyTorch, appending --flag_force_cpu option.")
+            cmd.append("--flag_force_cpu")
+    except Exception as e:
+        logger.warning(f"Could not import torch or check CUDA inside neutralize request: {str(e)}. Defaulting to CPU fallback.")
+        cmd.append("--flag_force_cpu")
+        
+    logger.info(f"Running command: {' '.join(cmd)} in working directory: {LIVEPORTRAIT_DIR}")
+    
+    try:
+        res = subprocess.run(cmd, cwd=LIVEPORTRAIT_DIR, capture_output=True, text=True, check=True)
+        logger.info(f"LivePortrait neutralize completed successfully.\nInference log output:\n{res.stdout}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"LivePortrait neutralize inference failed with exit code {e.returncode}.\nStdout: {e.stdout}\nStderr: {e.stderr}")
+        shutil.rmtree(session_dir)
+        raise HTTPException(status_code=500, detail=f"LivePortrait neutralize inference error: {e.stderr}")
+
+    # Find generated MP4 in the output folder
+    output_mp4s = glob.glob(os.path.join(outputs_dir, "**", "*.mp4"), recursive=True)
+    if not output_mp4s:
+        logger.error(f"No output MP4 video found in {outputs_dir} after successful neutralize execution.")
+        shutil.rmtree(session_dir)
+        raise HTTPException(status_code=500, detail="LivePortrait completed but failed to write final MP4 video.")
+
+    final_video_path = output_mp4s[0]
+    logger.info(f"Found neutralized video at {final_video_path}. Total execution time: {time.time() - start_time:.2f}s")
+    
+    # Schedule session cleanup in background after file is sent
+    background_tasks.add_task(cleanup_directory, session_dir)
+    
+    return FileResponse(final_video_path, media_type="video/mp4", filename="neutral_avatar.mp4")
+
 if __name__ == "__main__":
     import uvicorn
     logger.info("Starting LivePortrait FastAPI Server on port 5200...")

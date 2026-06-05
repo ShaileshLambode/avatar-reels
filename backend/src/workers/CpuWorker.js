@@ -111,8 +111,10 @@ class CpuWorker extends BaseWorker {
 
   async _handleLipSync(jobData, onProgress) {
     const { reelId, assets } = jobData;
+    const axios = require("axios");
+    const FormData = require("form-data");
 
-    if (onProgress) onProgress(10, "[LipSync] Checking upstream avatar video...");
+    if (onProgress) onProgress(10, "[LipSync] Checking upstream assets...");
 
     // Verify avatar video exists from Stage 3
     const avatarPath = path.resolve(__dirname, "../../../", assets.avatarVideoPath);
@@ -120,12 +122,115 @@ class CpuWorker extends BaseWorker {
       throw new Error(`LipSync: Avatar video not found at ${avatarPath}`);
     }
 
-    if (onProgress) onProgress(50, "[LipSync] LivePortrait output is already lip-synced. Passing through...");
-    if (onProgress) onProgress(100, "[LipSync] Passthrough complete!");
+    // Verify audio exists from Stage 2
+    const audioPath = path.resolve(__dirname, "../../../", assets.audioPath);
+    if (!fs.existsSync(audioPath)) {
+      throw new Error(`LipSync: Speech audio file not found at ${audioPath}`);
+    }
 
-    // Forward the avatar video path as the composedVideoPath for downstream stages
+    const config = require("../config/env");
+    if (config.MOCK_AVATAR) {
+      if (onProgress) onProgress(20, "[LipSync] MOCK MODE ACTIVE: Simulating MuseTalk lip-sync and CodeFormer face enhancement...");
+      const tempDir = path.resolve(__dirname, "../../../storage/temp", reelId.toString());
+      ensureDir(tempDir);
+      const finalComposedPath = path.join(tempDir, "composed.mp4");
+      fs.copyFileSync(avatarPath, finalComposedPath);
+      
+      if (onProgress) onProgress(100, "[LipSync] MOCK MODE: LipSync and enhancement complete!");
+      return {
+        composedVideoPath: sanitizePath(`storage/temp/${reelId}/composed.mp4`)
+      };
+    }
+
+    // MuseTalk service URL and config
+    const museTalkUrl = process.env.MUSETALK_SERVICE_URL || "http://localhost:5300";
+    const codeFormerUrl = process.env.CODEFORMER_SERVICE_URL || "http://localhost:5500";
+    const bboxShift = parseInt(process.env.MUSETALK_BBOX_SHIFT || "0", 10);
+    const fidelityWeight = parseFloat(process.env.CODEFORMER_FIDELITY || "0.7");
+
+    const tempDir = path.resolve(__dirname, "../../../storage/temp", reelId.toString());
+    ensureDir(tempDir);
+
+    const rawLipsyncPath = path.join(tempDir, "lipsynced_raw.mp4");
+    const finalComposedPath = path.join(tempDir, "composed.mp4");
+
+    // ── Step A: Call MuseTalk LipSync Service ─────────────────────────────────
+    if (onProgress) onProgress(20, "[LipSync] Running MuseTalk audio-driven lipsync...");
+    
+    try {
+      const museTalkForm = new FormData();
+      museTalkForm.append("portrait", fs.createReadStream(avatarPath));
+      museTalkForm.append("audio", fs.createReadStream(audioPath));
+      museTalkForm.append("bbox_shift", bboxShift.toString());
+
+      logger.info(`CpuWorker: Calling MuseTalk lipsync at ${museTalkUrl}/lipsync`);
+      const museTalkResponse = await axios.post(`${museTalkUrl}/lipsync`, museTalkForm, {
+        responseType: "stream",
+        headers: {
+          ...museTalkForm.getHeaders(),
+        },
+        timeout: 600000, // 10 minutes timeout
+      });
+
+      if (onProgress) onProgress(60, "[LipSync] Writing MuseTalk output...");
+
+      const writer1 = fs.createWriteStream(rawLipsyncPath);
+      museTalkResponse.data.pipe(writer1);
+
+      await new Promise((resolve, reject) => {
+        writer1.on("finish", resolve);
+        writer1.on("error", reject);
+      });
+
+      logger.info(`CpuWorker: MuseTalk lipsync successful. Output saved to ${rawLipsyncPath}`);
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || error.message;
+      logger.error(`CpuWorker: MuseTalk lipsync failed: ${errorMsg}`);
+      throw new Error(`MuseTalk lipsync failed: ${errorMsg}`);
+    }
+
+    // ── Step B: Call CodeFormer Face Enhancement ─────────────────────────────
+    if (onProgress) onProgress(70, "[LipSync] Enhancing face via CodeFormer...");
+    
+    try {
+      const codeFormerForm = new FormData();
+      codeFormerForm.append("video", fs.createReadStream(rawLipsyncPath));
+      codeFormerForm.append("fidelity_weight", fidelityWeight.toString());
+      codeFormerForm.append("face_upsample", "true");
+
+      logger.info(`CpuWorker: Calling CodeFormer enhance at ${codeFormerUrl}/enhance`);
+      const codeFormerResponse = await axios.post(`${codeFormerUrl}/enhance`, codeFormerForm, {
+        responseType: "stream",
+        headers: {
+          ...codeFormerForm.getHeaders(),
+        },
+        timeout: 600000, // 10 minutes timeout
+      });
+
+      if (onProgress) onProgress(90, "[LipSync] Writing CodeFormer output...");
+
+      const writer2 = fs.createWriteStream(finalComposedPath);
+      codeFormerResponse.data.pipe(writer2);
+
+      await new Promise((resolve, reject) => {
+        writer2.on("finish", resolve);
+        writer2.on("error", reject);
+      });
+
+      logger.info(`CpuWorker: CodeFormer enhancement successful. Output saved to ${finalComposedPath}`);
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || error.message;
+      logger.warn(`CpuWorker: CodeFormer failed, falling back to raw lipsync. Error: ${errorMsg}`);
+      
+      // Fallback: copy raw lipsynced video as composed video
+      fs.copyFileSync(rawLipsyncPath, finalComposedPath);
+      if (onProgress) onProgress(95, "[LipSync] CodeFormer failed, using raw lipsync fallback...");
+    }
+
+    if (onProgress) onProgress(100, "[LipSync] LipSync and enhancement complete!");
+
     return {
-      composedVideoPath: sanitizePath(assets.avatarVideoPath)
+      composedVideoPath: sanitizePath(`storage/temp/${reelId}/composed.mp4`)
     };
   }
 

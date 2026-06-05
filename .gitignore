@@ -4,6 +4,7 @@
 
 # Python virtual environments
 ai-engines/*/venv/
+ai-engines/*/venv-*/
 __pycache__/
 *.pyc
 *.pyo
@@ -11,9 +12,17 @@ __pycache__/
 # AI model weights (downloaded automatically at setup time)
 ai-engines/avatar/LivePortrait/pretrained_weights/
 !ai-engines/avatar/LivePortrait/pretrained_weights/.gitkeep
+ai-engines/musetalk/models/
+ai-engines/codeformer/weights/
+ai-engines/codeformer/facelib/
 
 # Temporary generation sessions
 ai-engines/avatar/temp/
+ai-engines/*/temp/
+ai-engines/hallo3/hallo3/.cache/
+ai-engines/hallo3/hallo3/pretrained_models/
+ai-engines/codeformer/.eggs/
+ai-engines/codeformer/basicsr.egg-info/
 
 # Node.js dependencies
 node_modules/

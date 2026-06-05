@@ -149,14 +149,22 @@ class AvatarService {
     try {
       // Build form-data for streaming files to FastAPI
       const form = new FormData();
-      form.append("source_image", fs.createReadStream(sourceImagePath));
-      form.append("driven_audio", fs.createReadStream(audioPath));
-      form.append("options", JSON.stringify({
-        relative_motion_mode: avatarConfig.relative_motion_mode !== false // Default to true
-      }));
+      let endpoint = "/animate";
+      
+      if (engine === "liveportrait") {
+        endpoint = "/neutralize";
+        form.append("portrait", fs.createReadStream(sourceImagePath));
+        form.append("duration_seconds", "3.0");
+      } else {
+        form.append("source_image", fs.createReadStream(sourceImagePath));
+        form.append("driven_audio", fs.createReadStream(audioPath));
+        form.append("options", JSON.stringify({
+          relative_motion_mode: avatarConfig.relative_motion_mode !== false // Default to true
+        }));
+      }
 
       // Stream the response directly to storage to avoid RAM blowup
-      const response = await axios.post(`${targetUrl}/animate`, form, {
+      const response = await axios.post(`${targetUrl}${endpoint}`, form, {
         responseType: "stream",
         headers: {
           ...form.getHeaders(),

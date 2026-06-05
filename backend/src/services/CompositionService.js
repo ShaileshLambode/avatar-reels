@@ -107,7 +107,7 @@ class CompositionService {
 
     const tempDir = path.resolve(__dirname, "../../../storage/temp", reelId);
     ensureDir(tempDir);
-    const outputPath = path.join(tempDir, "composed.mp4");
+    const outputPath = path.join(tempDir, "composed_music.mp4");
 
     if (onProgress) onProgress(20, "[Composition] Preparing FFmpeg filter graph...");
 
@@ -171,7 +171,7 @@ class CompositionService {
           if (onProgress) onProgress(100, "[Composition] Media composition complete!");
           
           resolve({
-            composedVideoPath: sanitizePath(`storage/temp/${reelId}/composed.mp4`)
+            composedVideoPath: sanitizePath(`storage/temp/${reelId}/composed_music.mp4`)
           });
         })
         .on("error", (err) => {
