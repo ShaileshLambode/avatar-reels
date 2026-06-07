@@ -81,39 +81,51 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to install mmengine."
 }
 
-# Install MMCV. First try openmim, then pip wheel index, and finally fallback to building MMCV from source.
+# Install MMCV. First try precompiled lite from PyPI, then mim, then pip wheels, and finally source compilation fallback.
 python -m pip install setuptools
 if ($LASTEXITCODE -ne 0) {
-    Write-Warning "Failed to pre-install setuptools. MMCV source build might fail if wheels fail."
+    Write-Warning "Failed to pre-install setuptools."
 }
 
 Write-Host "Installing mmcv==2.1.0..." -ForegroundColor Cyan
 $ErrorActionPreference = "Continue"
 
-# Step A: Try mim installation (official OpenMMLab manager, automatically handles wheel selection)
-Write-Host "Attempting mmcv installation via mim..." -ForegroundColor Yellow
-python -m mim install "mmcv==2.1.0"
-$MimStatus = $LASTEXITCODE
+# Step A: Try direct PyPI installation (downloads precompiled 'mmcv' lite wheel, no compiler or OpenMMLab server required)
+Write-Host "Step A: Attempting mmcv==2.1.0 installation from PyPI (precompiled lite)..." -ForegroundColor Yellow
+python -m pip install mmcv==2.1.0
+$PyPiStatus = $LASTEXITCODE
 
-if ($MimStatus -ne 0) {
-    Write-Host "mim install failed. Attempting direct pip installation from OpenMMLab wheels repository..." -ForegroundColor Yellow
-    # Step B: Direct pip wheel repository download
-    if ($HasCuda) {
-        python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1.0/index.html
-    } else {
-        python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1.0/index.html
-    }
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Precompiled wheel server unreachable. Attempting to build MMCV from source using --no-build-isolation..." -ForegroundColor Yellow
-        # Step C: Compiling MMCV from source with setuptools and no build isolation to bypass pkg_resources error
-        python -m pip install mmcv==2.1.0 --no-build-isolation
+if ($PyPiStatus -ne 0) {
+    Write-Host "PyPI install failed. Step B: Attempting mmcv installation via mim..." -ForegroundColor Yellow
+    # Step B: Try mim installation (official OpenMMLab manager)
+    python -m mim install "mmcv==2.1.0"
+    $MimStatus = $LASTEXITCODE
+
+    if ($MimStatus -ne 0) {
+        Write-Host "mim install failed. Step C: Attempting direct pip installation from OpenMMLab wheels repository..." -ForegroundColor Yellow
+        # Step C: Direct pip wheel repository download
+        if ($HasCuda) {
+            python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1.0/index.html
+        } else {
+            python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1.0/index.html
+        }
+        
         if ($LASTEXITCODE -ne 0) {
-            $ErrorActionPreference = "Stop"
-            Write-Error "Failed to install mmcv via mim, direct wheel, or source compilation."
+            Write-Host "Precompiled wheel server unreachable. Step D: Building MMCV from source (CPU extensions only to bypass CUDA_HOME requirements)..." -ForegroundColor Yellow
+            # Step D: Compiling MMCV from source without CUDA ops to bypass CUDA Toolkit requirements
+            $env:MMCV_WITH_OPS = "0"
+            python -m pip install mmcv==2.1.0 --no-build-isolation
+            if ($LASTEXITCODE -ne 0) {
+                $ErrorActionPreference = "Stop"
+                Write-Error "Failed to install mmcv via PyPI, mim, direct wheel, or source compilation."
+            }
         }
     }
 }
+
+# Post-MMCV: Enforce NumPy 1.x compatibility check immediately to fix any dependency resolution creep
+Write-Host "Enforcing NumPy compatibility post-MMCV install..." -ForegroundColor Cyan
+python -m pip install "numpy<2"
 $ErrorActionPreference = "Stop"
 
 # Pre-install wheel, scipy, and chumpy (without build isolation) to bypass Windows/pip compilation errors
