@@ -11,8 +11,22 @@ def download_pretrained_models(method, file_urls):
     save_path_root = f'./weights/{method}'
     os.makedirs(save_path_root, exist_ok=True)
 
+    import time
     for file_name, file_url in file_urls.items():
-        save_path = load_file_from_url(url=file_url, model_dir=save_path_root, progress=True, file_name=file_name)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"Downloading {file_name} (Attempt {attempt + 1}/{max_retries})...")
+                save_path = load_file_from_url(url=file_url, model_dir=save_path_root, progress=True, file_name=file_name)
+                print(f"Successfully downloaded {file_name}")
+                break
+            except Exception as e:
+                print(f"Error downloading {file_name}: {str(e)}")
+                if attempt < max_retries - 1:
+                    print("Waiting 5 seconds before retrying...")
+                    time.sleep(5)
+                else:
+                    raise e
 
 
 if __name__ == '__main__':

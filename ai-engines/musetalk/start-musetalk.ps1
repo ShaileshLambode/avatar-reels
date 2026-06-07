@@ -81,15 +81,40 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to install mmengine."
 }
 
-# Install MMCV from CPU/CUDA precompiled link
-if ($HasCuda) {
-    python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1.0/index.html
-} else {
-    python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1.0/index.html
-}
+# Install MMCV. First try openmim, then pip wheel index, and finally fallback to building MMCV from source.
+python -m pip install setuptools
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to install mmcv."
+    Write-Warning "Failed to pre-install setuptools. MMCV source build might fail if wheels fail."
 }
+
+Write-Host "Installing mmcv==2.1.0..." -ForegroundColor Cyan
+$ErrorActionPreference = "Continue"
+
+# Step A: Try mim installation (official OpenMMLab manager, automatically handles wheel selection)
+Write-Host "Attempting mmcv installation via mim..." -ForegroundColor Yellow
+python -m mim install "mmcv==2.1.0"
+$MimStatus = $LASTEXITCODE
+
+if ($MimStatus -ne 0) {
+    Write-Host "mim install failed. Attempting direct pip installation from OpenMMLab wheels repository..." -ForegroundColor Yellow
+    # Step B: Direct pip wheel repository download
+    if ($HasCuda) {
+        python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1.0/index.html
+    } else {
+        python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1.0/index.html
+    }
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Precompiled wheel server unreachable. Attempting to build MMCV from source using --no-build-isolation..." -ForegroundColor Yellow
+        # Step C: Compiling MMCV from source with setuptools and no build isolation to bypass pkg_resources error
+        python -m pip install mmcv==2.1.0 --no-build-isolation
+        if ($LASTEXITCODE -ne 0) {
+            $ErrorActionPreference = "Stop"
+            Write-Error "Failed to install mmcv via mim, direct wheel, or source compilation."
+        }
+    }
+}
+$ErrorActionPreference = "Stop"
 
 # Pre-install wheel, scipy, and chumpy (without build isolation) to bypass Windows/pip compilation errors
 Write-Host "Pre-installing wheel, scipy, and chumpy..." -ForegroundColor Cyan

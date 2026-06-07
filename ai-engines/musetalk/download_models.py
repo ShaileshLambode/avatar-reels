@@ -37,8 +37,25 @@ def download_file(url, path):
         else:
             print(f"\rDownloaded {readsofar / 1024 / 1024:.1f} MB", end="")
             
-    urllib.request.urlretrieve(url, path, reporthook)
-    print("\nDownload complete.")
+    import time
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            urllib.request.urlretrieve(url, path, reporthook)
+            print("\nDownload complete.")
+            return
+        except Exception as e:
+            print(f"\nError downloading {url}: {str(e)}")
+            if attempt < max_retries - 1:
+                print("Waiting 5 seconds before retrying...")
+                time.sleep(5)
+            else:
+                if os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except:
+                        pass
+                raise e
 
 for path, url in urls.items():
     download_file(url, path)

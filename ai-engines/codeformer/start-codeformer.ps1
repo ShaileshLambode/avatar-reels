@@ -106,9 +106,12 @@ Write-Host "All Python packages installed successfully." -ForegroundColor Green
 # 6. Download Model Weights
 Write-Host "[6/6] Downloading CodeFormer model weights..." -ForegroundColor Yellow
 python scripts/download_pretrained_models.py facelib
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to download face detection and parsing libraries (facelib)."
+}
 python scripts/download_pretrained_models.py CodeFormer
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to download model weights."
+    Write-Error "Failed to download CodeFormer model weights."
 }
 
 Write-Host "==========================================" -ForegroundColor Green
