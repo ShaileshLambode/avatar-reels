@@ -169,7 +169,7 @@ class CpuWorker extends BaseWorker {
         headers: {
           ...museTalkForm.getHeaders(),
         },
-        timeout: 600000, // 10 minutes timeout
+        timeout: 1800000, // 30 minutes timeout
       });
 
       if (onProgress) onProgress(60, "[LipSync] Writing MuseTalk output...");
@@ -204,7 +204,7 @@ class CpuWorker extends BaseWorker {
         headers: {
           ...codeFormerForm.getHeaders(),
         },
-        timeout: 600000, // 10 minutes timeout
+        timeout: 1800000, // 30 minutes timeout
       });
 
       if (onProgress) onProgress(90, "[LipSync] Writing CodeFormer output...");

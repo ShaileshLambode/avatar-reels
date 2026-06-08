@@ -1,6 +1,10 @@
 # XTTS v2 TTS Microservice Setup
 
-This is a Python-based FastAPI microservice hosting the XTTS v2 multi-speaker voice synthesis model. It is designed to run locally on your CPU on port 5100.
+This is a Python-based FastAPI microservice hosting the XTTS v2 multi-speaker voice synthesis model (running on port `5100`).
+
+In the AdWhiz Spokesperson Reels Production Pipeline:
+*   **Stage 2 (Voice Synthesis)**: This service receives script text and generates high-fidelity spokesperson voice audio.
+*   **Stage 4 (LipSync & Enhancement)**: The synthesized WAV audio output from this service is used to drive the mouth movements of the spokesperson via the MuseTalk engine.
 
 ## Prerequisites
 - Python 3.9, 3.10, or 3.11 (Python 3.10 is recommended)

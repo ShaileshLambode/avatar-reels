@@ -1,3 +1,46 @@
+# AdWhiz AI Reels Integration & Local Setup — CodeFormer Face Restore Service
+
+This folder contains the **CodeFormer face restoration engine** integrated as a local microservice for the AdWhiz Spokesperson Reels Production Pipeline.
+
+## 🚀 Microservice Architecture
+
+The service wraps CodeFormer with a **FastAPI** web server, listening on port `5500` by default. It takes a lip-synced video and runs face restoration to enhance detail, facial features, and clarity (combating any blurriness introduced during animation or lip syncing).
+
+### 🌐 Endpoints
+
+#### 1. Health Check
+* **Endpoint**: `GET /health`
+* **Response**: `{"status": "ok", "service": "codeformer"}`
+
+#### 2. Face Enhancement
+* **Endpoint**: `POST /enhance`
+* **Parameters** (multipart/form-data):
+  * `video`: Uploaded MP4 video file to enhance (typically the raw output of Stage 4 MuseTalk lip sync).
+  * `fidelity_weight` (float, default: 0.7): Balance between restoration and identity preservation. `0.0` offers maximum restoration; `1.0` offers maximum identity matching.
+  * `face_upsample` (bool, default: true): Whether to apply super-resolution upsampling to the restored face.
+* **Response**: MP4 video file stream containing the face-enhanced video.
+
+## 🚀 Quick Setup & Launch
+
+To bootstrap the engine, execute the PowerShell script from this directory:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-codeformer.ps1
+```
+
+This script will automatically:
+1. Initialize the Python virtual environment (`venv-codeformer`).
+2. Install GPU-enabled PyTorch (CUDA 12.1).
+3. Build and install the required BasicSR package.
+4. Download the pretrained models and detection assets (`facelib` and `CodeFormer`).
+5. Start the FastAPI microservice on port `5500`.
+
+---
+
+# Original CodeFormer Documentation
+*(Below is the original README for the CodeFormer repository)*
+
+***
+
 <p align="center">
   <img src="assets/CodeFormer_logo.png" height=110>
 </p>

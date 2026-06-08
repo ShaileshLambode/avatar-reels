@@ -2,6 +2,8 @@
 $ErrorActionPreference = "Stop"
 $ScriptName = $MyInvocation.MyCommand.Name
 $env:PYTHONIOENCODING="utf-8"
+$env:HF_ENDPOINT = "https://hf-mirror.com"
+
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "     AdWhiz MuseTalk Local Setup          " -ForegroundColor Cyan
@@ -53,8 +55,8 @@ if ($LASTEXITCODE -ne 0) {
 # 5. Install PyTorch and Dependencies
 Write-Host "[5/6] Installing dependencies (this may take several minutes)..." -ForegroundColor Yellow
 
-# Pre-install numpy<2 to avoid NumPy 2.x compatibility issues with older PyTorch and MMCV
-python -m pip install "numpy<2"
+# Pre-install wheel and numpy<2 to avoid NumPy 2.x compatibility issues with older PyTorch and MMCV
+python -m pip install wheel "numpy<2"
 
 # Use torch 2.1.0 to align with OpenMMLab precompiled wheels
 if ($HasCuda) {
@@ -76,13 +78,14 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to install openmim."
 }
 
-python -m mim install mmengine
+# Constrain numpy<2 during mmengine install to prevent pip upgrading it
+python -m mim install mmengine "numpy<2"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to install mmengine."
 }
 
 # Install MMCV. First try precompiled lite from PyPI, then mim, then pip wheels, and finally source compilation fallback.
-python -m pip install setuptools
+python -m pip install setuptools wheel
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "Failed to pre-install setuptools."
 }
@@ -90,9 +93,12 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Installing mmcv==2.1.0..." -ForegroundColor Cyan
 $ErrorActionPreference = "Continue"
 
-# Step A: Try direct PyPI installation (downloads precompiled 'mmcv' lite wheel, no compiler or OpenMMLab server required)
-Write-Host "Step A: Attempting mmcv==2.1.0 installation from PyPI (precompiled lite)..." -ForegroundColor Yellow
-python -m pip install mmcv==2.1.0
+# Uninstall any broken mmcv package fragments first
+python -m pip uninstall -y mmcv mmcv-lite
+
+# Step A: Try direct PyPI installation of mmcv-lite (downloads precompiled lite wheel, no compiler or OpenMMLab server required)
+Write-Host "Step A: Attempting mmcv-lite==2.1.0 installation from PyPI..." -ForegroundColor Yellow
+python -m pip install mmcv-lite==2.1.0
 $PyPiStatus = $LASTEXITCODE
 
 if ($PyPiStatus -ne 0) {
@@ -114,10 +120,10 @@ if ($PyPiStatus -ne 0) {
             Write-Host "Precompiled wheel server unreachable. Step D: Building MMCV from source (CPU extensions only to bypass CUDA_HOME requirements)..." -ForegroundColor Yellow
             # Step D: Compiling MMCV from source without CUDA ops to bypass CUDA Toolkit requirements
             $env:MMCV_WITH_OPS = "0"
-            python -m pip install mmcv==2.1.0 --no-build-isolation
+            python -m pip install mmcv-lite==2.1.0 --no-build-isolation
             if ($LASTEXITCODE -ne 0) {
                 $ErrorActionPreference = "Stop"
-                Write-Error "Failed to install mmcv via PyPI, mim, direct wheel, or source compilation."
+                Write-Error "Failed to install mmcv/mmcv-lite via PyPI, mim, direct wheel, or source compilation."
             }
         }
     }

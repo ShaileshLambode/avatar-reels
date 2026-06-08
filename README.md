@@ -5,24 +5,24 @@ An end-to-end AI-powered production pipeline that generates professional spokesp
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Express Backend (Port 4001)               │
-│         REST API  ·  BullMQ Queue  ·  MongoDB                │
-├──────────┬──────────┬──────────────┬────────────────────────┤
-│ Stage 1  │ Stage 2  │   Stage 3    │  Stage 4    │ Stage 5-6│
-│ Script   │ Voice    │   Avatar     │  Compose    │ Remotion │
-│ (OpenAI) │ (XTTS)   │ (LivePortrait)│ (FFmpeg)   │ Captions │
-│          │ :5100    │   :5200 GPU  │             │ Whisper  │
-└──────────┴──────────┴──────────────┴─────────────┴──────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              Express Backend (Port 4001)                                │
+│                   REST API  ·  BullMQ Queue  ·  MongoDB & Redis                         │
+├────────────┬────────────┬──────────────┬─────────────────────────┬────────────┬─────────┤
+│  Stage 1   │  Stage 2   │   Stage 3    │         Stage 4         │  Stage 5   │ Stage 6 │
+│   Script   │   Voice    │    Avatar    │    LipSync & Enhance    │  Compose   │Render & │
+│  (OpenAI)  │   (XTTS)   │(LivePortrait)│ (MuseTalk & CodeFormer) │  (FFmpeg)  │Captions │
+│            │  :5100     │  :5200 GPU   │    :5300  &  :5500 GPU  │            │(Remotion│
+└────────────┴────────────┴──────────────┴─────────────────────────┴────────────┴─────────┘
 ```
 
 ### Pipeline Stages
 1. **Script Generation** — GPT-4o-mini generates scene-by-scene dialogue
-2. **Voice Synthesis** — XTTS v2 produces high-fidelity speech audio
-3. **Avatar Animation** — LivePortrait animates a spokesperson face driven by audio (GPU-accelerated)
-4. **Video Composition** — FFmpeg composites avatar over background with music
-5. **Caption Overlay** — Remotion renders word-level animated captions via Whisper.cpp transcription
-6. **Final Export** — Polished vertical reel ready for social media
+2. **Voice Synthesis** — XTTS v2 produces high-fidelity speech audio (Port 5100)
+3. **Avatar Expression Animation** — LivePortrait local microservice animates source spokesperson face expressions (Port 5200 GPU)
+4. **LipSync & Face Enhancement** — MuseTalk local microservice generates precise audio-driven lip sync (Port 5300 GPU) and CodeFormer local microservice enhances the facial region (Port 5500 GPU)
+5. **Video Composition** — FFmpeg composites the enhanced talking head over the background with background music
+6. **Caption Overlay & Export** — Whisper.cpp transcribes the audio, and Remotion renders styled word-level animated captions to export the final vertical MP4 reel
 
 ## 🛠️ Tech Stack
 
@@ -32,11 +32,13 @@ An end-to-end AI-powered production pipeline that generates professional spokesp
 | **Job Queue** | BullMQ + Redis |
 | **Database** | MongoDB |
 | **AI Script** | OpenAI GPT-4o-mini |
-| **Voice TTS** | Coqui XTTS v2 (FastAPI microservice) |
-| **Avatar Engine** | LivePortrait with PyTorch CUDA (FastAPI microservice) |
+| **Voice TTS** | Coqui XTTS v2 (FastAPI microservice, Port 5100) |
+| **Avatar Engine** | LivePortrait with PyTorch CUDA (FastAPI microservice, Port 5200) |
+| **LipSync Engine** | MuseTalk with PyTorch CUDA (FastAPI microservice, Port 5300) |
+| **Face Enhancer** | CodeFormer with PyTorch CUDA (FastAPI microservice, Port 5500) |
 | **Video Processing** | FFmpeg, fluent-ffmpeg |
 | **Caption Rendering** | Remotion + Whisper.cpp |
-| **GPU Acceleration** | NVIDIA CUDA (RTX 2050+) |
+| **GPU Acceleration** | NVIDIA CUDA (GeForce RTX 2050+, minimum 4GB VRAM) |
 
 ## 📋 Prerequisites
 
@@ -57,9 +59,15 @@ See **[SETUP.md](SETUP.md)** for complete step-by-step setup and deployment inst
 ```
 avatar-reels/
 ├── ai-engines/
-│   ├── avatar/          # LivePortrait GPU spokesperson engine (Port 5200)
+│   ├── avatar/          # LivePortrait GPU expression engine (Port 5200)
 │   │   ├── server.py    # FastAPI wrapper
 │   │   └── start-avatar.ps1  # Auto-setup: venv, CUDA PyTorch, model weights
+│   ├── musetalk/        # MuseTalk GPU lip-sync engine (Port 5300)
+│   │   ├── server.py    # FastAPI wrapper
+│   │   └── start-musetalk.ps1 # Auto-setup: venv, dependencies, model weights (FP16 optimized)
+│   ├── codeformer/      # CodeFormer GPU face enhancement engine (Port 5500)
+│   │   ├── server.py    # FastAPI wrapper
+│   │   └── start-codeformer.ps1 # Auto-setup: venv, basicsr build, model weights
 │   └── tts/             # XTTS v2 voice synthesis engine (Port 5100)
 │       ├── server.py    # FastAPI wrapper
 │       └── start-tts.ps1     # Auto-setup: venv, dependencies

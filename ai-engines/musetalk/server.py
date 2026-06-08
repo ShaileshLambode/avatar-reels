@@ -22,7 +22,7 @@ async def lipsync(
     portrait: UploadFile = File(..., description="Neutral video loop (mp4)"),
     audio: UploadFile = File(..., description="Speech audio WAV file"),
     bbox_shift: int = Form(default=0, description="Mask shift. Positive = more open mouth"),
-    batch_size: int = Form(default=4),
+    batch_size: int = Form(default=2),
 ):
     """
     Runs MuseTalk inference.
@@ -74,7 +74,8 @@ task_{job_id}:
         "--output_vid_name", str(output_path.name),
         "--bbox_shift", str(bbox_shift),
         "--batch_size", str(batch_size),
-        "--ffmpeg_path", "C:\\ffmpeg\\bin"
+        "--ffmpeg_path", "C:\\ffmpeg\\bin",
+        "--use_float16"
     ]
 
     print(f"Running MuseTalk CLI command: {' '.join(cmd)}")
@@ -87,6 +88,9 @@ task_{job_id}:
     )
 
     if result.returncode != 0:
+        print("MuseTalk execution failed!")
+        print("STDOUT:", result.stdout)
+        print("STDERR:", result.stderr)
         raise HTTPException(
             status_code=500,
             detail=f"MuseTalk failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"

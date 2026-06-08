@@ -1,24 +1,24 @@
 # AdWhiz Reel Pipeline: GPU Migration & Transition Guide
 
-This document provides complete, step-by-step instructions to successfully migrate the **AdWhiz Spokesperson Reels Production Pipeline** from your CPU-only environment to your new **NVIDIA RTX 2050 GPU with CUDA** device. 
+This document provides complete, step-by-step instructions to successfully migrate and run the **AdWhiz Spokesperson Reels Production Pipeline** on your **NVIDIA RTX 2050 GPU with CUDA** device. 
 
-Follow these steps precisely to unlock lightning-fast spokesperson rendering using the newly integrated **LivePortrait** local engine.
+Follow these steps precisely to unlock high-speed local spokesperson rendering using the integrated **LivePortrait**, **MuseTalk**, and **CodeFormer** engines.
 
 ---
 
 ## 📋 System Prerequisites on the New Device
 
-Before running any scripts, ensure the following core runtimes are installed on your new Windows laptop:
+Before running any scripts, ensure the following core runtimes are installed on your Windows laptop:
 
 1. **NVIDIA Graphics Drivers**:
    * Verify drivers are active by opening a PowerShell window and running:
      ```powershell
      nvidia-smi
      ```
-   * It should display your GPU model (NVIDIA GeForce RTX 2050) and active CUDA driver version.
+   * It must display your GPU model (NVIDIA GeForce RTX 2050) and active CUDA driver version.
 2. **Python Runtime**:
-   * Install **Python 3.9 or 3.10** (avoid 3.11/3.12 for maximum ONNX/PyTorch module compatibility).
-   * **IMPORTANT**: During Python setup, make sure to check the box **"Add Python to PATH"**.
+   * Install **Python 3.10** (avoid 3.11/3.12 for maximum package/PyTorch module compatibility).
+   * **IMPORTANT**: During Python setup, check the box **"Add Python to PATH"**.
 3. **Node.js**:
    * Install **Node.js (v18 or v20)** from the official website.
 4. **FFmpeg**:
@@ -26,76 +26,106 @@ Before running any scripts, ensure the following core runtimes are installed on 
    * Alternatively, ensure `ffmpeg.exe` is placed at `C:\ffmpeg\bin\ffmpeg.exe` (which is configured as our automated fallback path).
 5. **Git**:
    * Install **Git for Windows** so the setup script can run cloning and repository validations.
+6. **System Page File Expansion (Critical for 4GB VRAM)**:
+   * Loading multiple large models simultaneously can exhaust your GPU's physical memory, triggering Windows WDDM virtual allocation. If your system page file is too small, PyTorch allocations will crash with Out Of Memory (OOM).
+   * To prevent this, run the provided automated script as **Administrator** in a PowerShell window:
+     ```powershell
+     powershell -ExecutionPolicy Bypass -File .\increase-pagefile.ps1
+     ```
+   * This configures a fixed **20GB - 24GB page file** to act as a stable backing store.
 
 ---
 
 ## 🧹 Step 1: Clean CPU-Specific Folders
 
-To avoid dependency mismatches or compilation conflicts between CPU and GPU architectures, **delete the following folders** immediately after unzipping the `\avatar-reels` folder on your new device:
+To avoid dependency mismatches or compilation conflicts between CPU and GPU architectures, **delete the following virtual environments** immediately after unzipping the `\avatar-reels` folder on your new device:
 
 > [!WARNING]
-> Do NOT skip this step! Failing to delete the old virtualenv will force the engine to run in slow CPU emulation mode on your new GPU laptop.
+> Do NOT skip this step! Failing to delete the old virtualenv will force the engines to run in slow CPU emulation mode or throw DLL load failures on your new GPU laptop.
 
 ### 🗑️ Folders to Delete:
-1. **`\ai-engines\avatar\venv\`** (The entire virtualenv folder).
-   * *Why*: Contains CPU-only wheels of PyTorch, which are binary-compiled and cannot detect your RTX GPU.
-2. **`\ai-engines\avatar\temp\`** (The entire temporary sessions folder, if present).
-   * *Why*: Cleans up old audio/video generation sessions from CPU debugging.
-3. **`\backend\node_modules\`** (Optional but highly recommended).
-   * *Why*: Prevents native Node.js binary compilation issues between different Windows environments.
-4. **`\remotion\node_modules\`** (Optional but highly recommended).
-   * *Why*: Prevents Remotion compilation mismatches.
+1. **`\ai-engines\avatar\venv\`** (LivePortrait virtualenv folder)
+2. **`\ai-engines\musetalk\venv-musetalk\`** (MuseTalk virtualenv folder)
+3. **`\ai-engines\codeformer\venv-codeformer\`** (CodeFormer virtualenv folder)
+4. **`\backend\node_modules\`** (Node.js backend dependencies)
+5. **`\remotion\node_modules\`** (Remotion rendering dependencies)
 
 ---
 
 ## 🚀 Step 2: GPU AI Engine Initialization (FastAPI)
 
-We will now build a fresh virtual environment specifically compiled for your RTX 2050 CUDA cores.
+We will now build fresh virtual environments specifically compiled for your RTX 2050 CUDA cores. Open **PowerShell** as **Administrator** for each step.
 
-1. Open **PowerShell** as **Administrator**.
-2. Navigate to your avatar engine directory:
+### 🎭 Engine A: LivePortrait Service (Port 5200)
+1. Navigate to the avatar engine directory:
    ```powershell
    cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels\ai-engines\avatar"
    ```
-3. Run the automated bootstrapper:
+2. Run the automated bootstrapper:
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\start-avatar.ps1
    ```
+* **What it does**: Clones KwaiVGI LivePortrait repository, creates `venv`, installs **PyTorch CUDA 12.1**, resolves dependencies, verifies models, and starts FastAPI on port `5200`.
 
-### 🔍 What `start-avatar.ps1` Will Automatically Do:
-* **CUDA Detection**: Uses `nvidia-smi` to verify your RTX 2050 is ready.
-* **Fresh Venv**: Creates a brand new Python virtual environment.
-* **CUDA PyTorch Setup**: Auto-installs **PyTorch with CUDA 12.1 acceleration** directly from the PyTorch repository.
-* **Requirements Installation**: Auto-installs all required dependencies (handling OpenCV conflict resolutions cleanly).
-* **Model Check**: Confirms your `pretrained_weights/` are present and ready (no heavy redownloading needed!).
-* **Boot FastAPI**: Starts the FastAPI microservice on `http://localhost:5200` in **full GPU Acceleration Mode**.
+### 👄 Engine B: MuseTalk LipSync Service (Port 5300 - Low-VRAM Optimized)
+1. Navigate to the MuseTalk engine directory:
+   ```powershell
+   cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels\ai-engines\musetalk"
+   ```
+2. Run the automated bootstrapper:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\start-musetalk.ps1
+   ```
+* **What it does**: Clones TMElyralab MuseTalk repository, creates `venv-musetalk`, installs PyTorch CUDA 12.1.
+* **Fallback Resolution**: If the OpenMMLab precompiled wheel server is unreachable, the script automatically falls back to PyPI `mmcv-lite` installation and CPU extension source compilations.
+* **Low-VRAM Configuration**: MuseTalk runs inside `server.py` with `--use_float16` and `--batch_size 2` (default is 4). This drops local VRAM usage down to **3.32 GB**, running smoothly on the 4GB RTX 2050 without virtual paging slowdowns.
+
+### 💫 Engine C: CodeFormer Face Enhancement Service (Port 5500)
+1. Navigate to the CodeFormer engine directory:
+   ```powershell
+   cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels\ai-engines\codeformer"
+   ```
+2. Run the automated bootstrapper:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\start-codeformer.ps1
+   ```
+* **What it does**: Clones CodeFormer, compiles `basicsr`, downloads face detection and parsing libraries (`facelib` & `CodeFormer`), and launches the enhancement microservice on port `5500`.
 
 ---
 
 ## 🌐 Step 3: Node.js Backend & Remotion Setup
 
-With the GPU microservice actively running in one terminal, we will now prepare the Node.js backend and the Remotion rendering environment.
+With the three GPU microservices actively running, prepare the Node.js backend and the Remotion rendering environment.
 
 ### 📦 Part A: Backend Setup
-1. Open a **second terminal** and navigate to the backend directory:
+1. Open a new terminal and navigate to the backend directory:
    ```powershell
    cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels\backend"
    ```
-2. Reinstall backend node packages:
+2. Install node packages:
    ```bash
    npm install
    ```
-3. Open `backend/.env` and ensure **mock mode is disabled** so real AI generation runs:
+3. Open `backend/.env` and verify the settings:
    ```env
+   PORT=4001
+   MONGODB_URI=mongodb://localhost:27017/adwhiz_reels
+   REDIS_URL=redis://localhost:6379
    MOCK_AVATAR=false
+   AVATAR_ENGINE=liveportrait
+   TTS_SERVICE_URL=http://localhost:5100
+   AVATAR_SERVICE_URL=http://localhost:5200
+   LIPSYNC_SERVICE_URL=http://localhost:5300
    ```
+   > [!NOTE]
+   > **Extended Axios Timeouts**: The backend Express worker has been updated with a 30-minute (`1800000ms`) timeout buffer. This ensures that even if local AI services experience cold starts (e.g. initial weights loading) or queued execution, the request will not timeout.
 
 ### 🎬 Part B: Remotion Setup
-1. In the same terminal (or a new one), navigate to the remotion directory:
+1. Navigate to the remotion directory:
    ```powershell
    cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels\remotion"
    ```
-2. Reinstall remotion node packages:
+2. Install Remotion packages:
    ```bash
    npm install
    ```
@@ -104,16 +134,13 @@ With the GPU microservice actively running in one terminal, we will now prepare 
 
 ## 🧪 Step 4: Run Fast E2E Pipeline Integration Tests
 
-To make sure the new GPU pipeline works flawlessly without long CPU rendering wait times, I've compiled a **3-second short integration test** (`test_liveportrait_short.js`). 
-
-This runs the exact E2E spokesperson generation pipeline (Stage A driving video loop + Stage B LivePortrait CUDA inference) on a 3-second audio track.
+To verify that the newly integrated GPU pipeline works flawlessly on a short render:
 
 1. In the backend terminal, run the short integration test:
    ```bash
    node test_liveportrait_short.js
    ```
 2. **Observe the magic**:
-   * The terminal will print: `[PROGRESS 5%] [Avatar] Checking LivePortrait service health...`
    * It will resolve the default face avatar image and the short vocal track.
    * PyTorch on CUDA will engage! **It will animate the spokesperson in just 5–15 seconds!**
    * The generated video will save to `storage/temp/test_liveportrait_short/avatar.mp4`.
@@ -126,67 +153,45 @@ This runs the exact E2E spokesperson generation pipeline (Stage A driving video 
 
 ## 🎬 Step 5: Start the Full Multi-Stage Production
 
-Once your GPU and integration tests validate successfully, you are officially ready to boot the entire **AdWhiz AI Spokesperson Reels Production Pipeline**!
+Once your GPU and integration tests validate successfully, boot the entire **AdWhiz AI Spokesperson Reels Production Pipeline**!
 
-To execute a complete multi-stage, high-fidelity spokesperson video compilation, open the following five terminal windows:
+To execute a complete multi-stage, high-fidelity spokesperson video compilation, open the following **six terminal windows**:
 
 ### 📟 Terminal 1: Redis Server
 * **Why**: BullMQ requires a local Redis connection to orchestrate job queues and dynamic progress telemetry.
-* **Commands**:
-  * *Option A (Docker)*: 
-    ```bash
-    docker run -d -p 6379:6379 redis
-    ```
-  * *Option B (Windows Native)*: Launch `redis-server.exe` directly on your host machine.
+* **Commands**: Launch Docker (`docker run -d -p 6379:6379 redis`) or launch `redis-server.exe` directly.
 
 ### 📟 Terminal 2: TTS Vocal Engine (Port 5100)
-* **Why**: Generates the high-fidelity spokesperson voice audio tracks for Stage 2 of the pipeline.
-* **Directory**:
-  ```powershell
-  cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels\ai-engines\tts"
-  ```
-* **Command**:
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File .\start-tts.ps1
-  ```
+* **Directory**: `ai-engines/tts/`
+* **Command**: `powershell -ExecutionPolicy Bypass -File .\start-tts.ps1`
 
 ### 📟 Terminal 3: LivePortrait Spokesperson Engine (Port 5200 - GPU Mode)
-* **Why**: Animates the spokesperson face driven by audio using PyTorch CUDA acceleration.
-* **Directory**:
-  ```powershell
-  cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels\ai-engines\avatar"
-  ```
-* **Command**:
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File .\start-avatar.ps1
-  ```
+* **Directory**: `ai-engines/avatar/`
+* **Command**: `powershell -ExecutionPolicy Bypass -File .\start-avatar.ps1`
 
-### 📟 Terminal 4: AdWhiz Express Backend Server & Queue Worker (Port 4001)
-* **Why**: Hosts the REST API endpoint, connects MongoDB, and initializes the BullMQ `reel-pipeline` background queue processor.
-* **Directory**:
-  ```powershell
-  cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels\backend"
-  ```
-* **Command**:
-  ```bash
-  npm run dev
-  ```
+### 📟 Terminal 4: MuseTalk LipSync Engine (Port 5300 - GPU FP16 Mode)
+* **Directory**: `ai-engines/musetalk/`
+* **Command**: `powershell -ExecutionPolicy Bypass -File .\start-musetalk.ps1`
 
-### 📟 Terminal 5: E2E Pipeline Trigger & Telemetry Monitor
-* **Why**: Used to post real production payloads and track database/rendering progress in real time.
-* **Directory**:
-  ```powershell
-  cd "c:\Users\lmn21\Work\AIMAVEN\Projects\31-May\avatar-reels"
-  ```
-* **Step A: Trigger the generation of a full 30-second spokesperson reel**:
+### 📟 Terminal 5: CodeFormer Face Enhancement (Port 5500 - GPU Mode)
+* **Directory**: `ai-engines/codeformer/`
+* **Command**: `powershell -ExecutionPolicy Bypass -File .\start-codeformer.ps1`
+
+### 📟 Terminal 6: Express Backend Server & Queue Worker (Port 4001)
+* **Directory**: `backend/`
+* **Command**: `npm run dev`
+
+### 📟 Terminal 7: E2E Pipeline Trigger & Telemetry Monitor
+* **Directory**: `avatar-reels/`
+* **Trigger the generation of a full 30-second spokesperson reel**:
   ```bash
   node test_sample_post.js
   ```
-* **Step B: Actively track stage progress and live GPU telemetry**:
+* **Track stage progress and live GPU telemetry**:
   ```bash
   node verify_sample.js
   ```
 
 ---
 
-**Congratulations! Your full spool spokesperson generation pipeline is now up, running, and blazing through CUDA acceleration on your new GPU machine! 🎉**
+**Congratulations! Your full 6-stage spokesperson generation pipeline is now up, running, and blazing through CUDA acceleration on your GPU machine! 🎉**

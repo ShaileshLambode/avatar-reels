@@ -1,3 +1,53 @@
+# AdWhiz AI Reels Integration & Local Setup — MuseTalk LipSync Service
+
+This folder contains the **MuseTalk lip-syncing engine** integrated as a local microservice for the AdWhiz Spokesperson Reels Production Pipeline.
+
+## 🚀 Microservice Architecture
+
+The service wraps MuseTalk with a **FastAPI** web server, listening on port `5300` by default. It takes a source talking-head video and a voice synthesis audio file, processes them through MuseTalk, and returns a frame-by-frame lip-synced MP4 video.
+
+### 🌐 Endpoints
+
+#### 1. Health Check
+* **Endpoint**: `GET /health`
+* **Response**: `{"status": "ok", "service": "musetalk"}`
+
+#### 2. Lip-Sync Inference
+* **Endpoint**: `POST /lipsync`
+* **Parameters** (multipart/form-data):
+  * `portrait`: Uploaded MP4 video file (neutral face loop generated from Stage 3).
+  * `audio`: Uploaded WAV audio file (voice synth generated from Stage 2).
+  * `bbox_shift` (int, default: 0): Vertical mask displacement. Adjust to control mouth openness (positive values = more open mouth).
+  * `batch_size` (int, default: 2): Internal batch size processing (lowered from default 4 for low-VRAM environments).
+* **Response**: MP4 video file stream containing the lip-synced video.
+
+## 🛠️ Low-VRAM Optimizations (RTX 2050 4GB)
+
+* **Float16 Execution**: The backend CLI invokes MuseTalk with the `--use_float16` flag.
+* **Reduced Batch Size**: The API endpoint defaults `batch_size` to `2`.
+* These optimizations successfully constrain GPU VRAM usage to **3.32 GB** (down from 6GB+), enabling real-time speed execution on a 4GB VRAM GPU.
+
+## 🚀 Quick Setup & Launch
+
+To bootstrap the engine, execute the PowerShell script from this directory:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-musetalk.ps1
+```
+
+This script will automatically:
+1. Initialize the Python virtual environment (`venv-musetalk`).
+2. Install GPU-enabled PyTorch (CUDA 12.1).
+3. Handle OpenMMLab offline servers by checking PyPI dependencies (`mmcv-lite`) and compilation fallbacks.
+4. Download the MuseTalk model weights.
+5. Start the FastAPI microservice on port `5300`.
+
+---
+
+# Original MuseTalk Documentation
+*(Below is the original README for the MuseTalk repository)*
+
+***
+
 # MuseTalk
 
 <strong>MuseTalk: Real-Time High-Fidelity Video Dubbing via Spatio-Temporal Sampling</strong>

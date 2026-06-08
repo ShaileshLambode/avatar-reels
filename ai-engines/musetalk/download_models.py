@@ -1,20 +1,22 @@
 import os
-import urllib.request
-from huggingface_hub import snapshot_download
+import requests
 
 # Create directories
+os.makedirs("models/musetalk", exist_ok=True)
+os.makedirs("models/musetalkV15", exist_ok=True)
+os.makedirs("models/sd-vae-ft-mse", exist_ok=True)
 os.makedirs("models/dwpose", exist_ok=True)
 os.makedirs("models/face-parse-bisent", exist_ok=True)
 os.makedirs("models/whisper", exist_ok=True)
 
-print("Downloading MuseTalk model snapshot from Hugging Face...")
-snapshot_download(repo_id='TMElyralab/MuseTalk', local_dir='./models/musetalk', ignore_patterns=["*.git*", "*.gitattributes"])
-
-print("Downloading SD VAE ft-mse snapshot from Hugging Face...")
-snapshot_download(repo_id='stabilityai/sd-vae-ft-mse', local_dir='./models/sd-vae-ft-mse', ignore_patterns=["*.git*", "*.gitattributes"])
-
 # Define urls to download
 urls = {
+    "models/musetalk/musetalk.json": "https://huggingface.co/TMElyralab/MuseTalk/resolve/main/musetalk/musetalk.json",
+    "models/musetalk/pytorch_model.bin": "https://huggingface.co/TMElyralab/MuseTalk/resolve/main/musetalk/pytorch_model.bin",
+    "models/musetalkV15/musetalk.json": "https://huggingface.co/TMElyralab/MuseTalk/resolve/main/musetalkV15/musetalk.json",
+    "models/musetalkV15/unet.pth": "https://huggingface.co/TMElyralab/MuseTalk/resolve/main/musetalkV15/unet.pth",
+    "models/sd-vae-ft-mse/config.json": "https://huggingface.co/stabilityai/sd-vae-ft-mse/resolve/main/config.json",
+    "models/sd-vae-ft-mse/diffusion_pytorch_model.bin": "https://huggingface.co/stabilityai/sd-vae-ft-mse/resolve/main/diffusion_pytorch_model.bin",
     "models/dwpose/dw-ll_ucoco_384.pth": "https://huggingface.co/yzd-v/DWPose/resolve/main/dw-ll_ucoco_384.pth",
     "models/face-parse-bisent/79999_iter.pth": "https://huggingface.co/ManyOtherFunctions/face-parse-bisent/resolve/main/79999_iter.pth",
     "models/face-parse-bisent/resnet18-5c106cde.pth": "https://download.pytorch.org/models/resnet18-5c106cde.pth",
@@ -22,26 +24,38 @@ urls = {
 }
 
 def download_file(url, path):
-    if os.path.exists(path):
-        print(f"{path} already exists. Skipping download.")
+    if os.path.exists(path) and os.path.getsize(path) > 1024:
+        print(f"{path} already exists and is non-empty. Skipping download.")
         return
+    
+    # Apply HF_ENDPOINT mirror if configured
+    endpoint = os.environ.get("HF_ENDPOINT", "").strip().rstrip("/")
+    if endpoint and "huggingface.co" not in endpoint:
+        url = url.replace("https://huggingface.co", endpoint)
+        
     print(f"Downloading {url} to {path}...")
     
-    # Custom progress bar
-    def reporthook(blocknum, blocksize, totalsize):
-        readsofar = blocknum * blocksize
-        if totalsize > 0:
-            percent = readsofar * 1e2 / totalsize
-            s = f"\rProgress: {percent:.1f}% ({readsofar / 1024 / 1024:.1f} MB of {totalsize / 1024 / 1024:.1f} MB)"
-            print(s, end="")
-        else:
-            print(f"\rDownloaded {readsofar / 1024 / 1024:.1f} MB", end="")
-            
     import time
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            urllib.request.urlretrieve(url, path, reporthook)
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            with requests.get(url, headers=headers, stream=True, allow_redirects=True) as response:
+                response.raise_for_status()
+                total_size = int(response.headers.get('content-length', 0))
+                bytes_so_far = 0
+                chunk_size = 1024 * 1024  # 1MB chunks
+                
+                with open(path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            f.write(chunk)
+                            bytes_so_far += len(chunk)
+                            if total_size > 0:
+                                percent = bytes_so_far * 1e2 / total_size
+                                print(f"\rProgress: {percent:.1f}% ({bytes_so_far / 1024 / 1024:.1f} MB of {total_size / 1024 / 1024:.1f} MB)", end="")
+                            else:
+                                print(f"\rDownloaded {bytes_so_far / 1024 / 1024:.1f} MB", end="")
             print("\nDownload complete.")
             return
         except Exception as e:

@@ -8,7 +8,7 @@ Unlike SadTalker which is natively audio-driven, LivePortrait is fundamentally *
 
 To integrate this smoothly into our audio-driven pipeline, this microservice uses a robust **two-stage local pipeline**:
 1. **Stage A — Driving Video Generation:** Loops the input source image with the driving audio using FFmpeg. This creates a temporal reference video of the correct duration.
-2. **Stage B — LivePortrait Inference:** Feeds the source image and generated driving video into LivePortrait's core inference engine to generate the final high-definition, lip-synced animated talking-head MP4.
+2. **Stage B — LivePortrait Inference:** Feeds the source image and generated driving video into LivePortrait's core inference engine to generate the animated talking-head spokesperson MP4. This animated video serves as the base for Stage 4 of the main pipeline, where it undergoes audio-driven lip sync (via MuseTalk) and face restoration/enhancement (via CodeFormer).
 
 ## Features
 
